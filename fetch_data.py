@@ -12,12 +12,13 @@ if not url or not key:
 
 supabase: Client = create_client(url, key)
 
-# Define Airspace Bounding Boxes
+# Dictionary of target airports and their airspace bounding boxes (lamin, lomin, lamax, lomax)
 AIRPORTS = {
     "KLGA": {"lamin": 40.76, "lamax": 40.79, "lomin": -73.89, "lomax": -73.86},
     "KJFK": {"lamin": 40.62, "lamax": 40.66, "lomin": -73.80, "lomax": -73.76},
     "EWR":  {"lamin": 40.67, "lamax": 40.71, "lomin": -74.19, "lomax": -74.15},
-    "KORD": {"lamin": 41.96, "lamax": 41.99, "lomin": -87.92, "lomax": -87.88}
+    "KORD": {"lamin": 41.96, "lamax": 41.99, "lomin": -87.92, "lomax": -87.88},
+    "KSYR": {"lamin": 43.09, "lamax": 43.13, "lomin": -76.13, "lomax": -76.08}
 }
 
 def fetch_flight_route_details(icao24):
