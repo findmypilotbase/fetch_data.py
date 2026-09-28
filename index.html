@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Air Traffic Live Database</title>
+  
+  <!-- Supabase JS Library via CDN -->
+<script>
+  // 1. Initialize Supabase Client
+  const SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co";
+  const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_PUBLIC_KEY";
+
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Helper function to render a flight row
+  function createFlightRowHTML(flight) {
+    const isGround = flight.event_type.includes("ground");
+    const statusClass = isGround ? "ground" : "airborne";
+    const recordedTime = new Date(flight.recorded_at).toLocaleString();
+
+    return `
+      <tr id="flight-${flight.id}">
+        <td><strong>${flight.airport_code}</strong></td>
+        <td>${flight.callsign || 'N/A'}</td>
+        <td><code>${flight.icao24}</code></td>
+        <td>${flight.departure_airport || 'UNKNOWN'}</td>
+        <td>${flight.arrival_airport || 'UNKNOWN'}</td>
+        <td><span class="badge ${statusClass}">${flight.event_type}</span></td>
+        <td style="color: #94a3b8; font-size: 0.85rem;">${recordedTime}</td>
+      </tr>
+    `;
+  }
+
+  // 2. Query initial data on page load
+  async function loadFlights() {
+    const tbody = document.getElementById("flight-table-body");
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Fetching latest records...</td></tr>';
+
+    try {
+      const { data: flights, error } = await supabaseClient
+        .from("airport_flights")
+        .select("*")
+        .order("recorded_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      if (!flights || flights.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No records found in database.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = flights.map(createFlightRowHTML).join("");
+    } catch (err) {
+      console.error("Supabase Error:", err);
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #f87171;">Error: ${err.message}</td></tr>`;
+    }
+  }
+
+  // 3. Enable Realtime Listener for New Rows
+  function subscribeToRealtimeFlights() {
+    supabaseClient
+      .channel("public:airport_flights")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "airport_flights"
+        },
+        (payload) => {
+          console.log("✈️ New flight record inserted in real time:", payload.new);
+
+          const tbody = document.getElementById("flight-table-body");
+          
+          // Clear "No records" placeholder if present
+          if (tbody.children.length === 1 && tbody.innerText.includes("No records")) {
+            tbody.innerHTML = "";
+          }
+
+          // Prepend new row at the top of the table
+          const newRowHTML = createFlightRowHTML(payload.new);
+          tbody.insertAdjacentHTML("afterbegin", newRowHTML);
+        }
+      )
+      .subscribe((status) => {
+        console.log("Realtime subscription status:", status);
+      });
+  }
+
+  // Run on page load
+  loadFlights();
+  subscribeToRealtimeFlights();
+</script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    h1 { margin: 0; font-size: 1.5rem; }
+    button {
+      background-color: #38bdf8;
+      color: #0f172a;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background-color: #7dd3fc; }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #1e293b;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+    th {
+      background-color: #334155;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    tr:hover { background-color: #2e3d52; }
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .airborne { background-color: #0284c7; color: #fff; }
+    .ground { background-color: #059669; color: #fff; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>✈️ Multi-Airport Flight Tracker</h1>
+      <button onclick="loadFlights()">Refresh Data</button>
+    </header>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Airport</th>
+          <th>Callsign</th>
+          <th>ICAO24</th>
+          <th>Origin</th>
+          <th>Destination</th>
+          <th>Status</th>
+          <th>Recorded At</th>
+        </tr>
+      </thead>
+      <tbody id="flight-table-body">
+        <tr>
+          <td colspan="7" style="text-align: center; color: #94a3b8;">Loading flights from Supabase...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // 1. Initialize Supabase Client
+    // Replace these with your actual Supabase Project URL and anon public key
+    const SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_PUBLIC_KEY";
+
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 2. Query Data from the `airport_flights` table
+    async function loadFlights() {
+      const tbody = document.getElementById("flight-table-body");
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Fetching latest records...</td></tr>';
+
+      try {
+        // Query the latest 50 records ordered by timestamp descending
+        const { data: flights, error } = await supabaseClient
+          .from("airport_flights")
+          .select("*")
+          .order("recorded_at", { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+
+        if (!flights || flights.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No records found in database.</td></tr>';
+          return;
+        }
+
+        // Render table rows
+        tbody.innerHTML = flights.map(flight => {
+          const isGround = flight.event_type.includes("ground");
+          const statusClass = isGround ? "ground" : "airborne";
+          const recordedTime = new Date(flight.recorded_at).toLocaleString();
+
+          return `
+            <tr>
+              <td><strong>${flight.airport_code}</strong></td>
+              <td>${flight.callsign || 'N/A'}</td>
+              <td><code>${flight.icao24}</code></td>
+              <td>${flight.departure_airport || 'UNKNOWN'}</td>
+              <td>${flight.arrival_airport || 'UNKNOWN'}</td>
+              <td><span class="badge ${statusClass}">${flight.event_type}</span></td>
+              <td style="color: #94a3b8; font-size: 0.85rem;">${recordedTime}</td>
+            </tr>
+          `;
+        }).join("");
+
+      } catch (err) {
+        console.error("Supabase Query Error:", err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #f87171;">Error loading data: ${err.message}</td></tr>`;
+      }
+    }
+
+    // Load data on page launch
+    loadFlights();
+  </script>
+</body>
+</html>
